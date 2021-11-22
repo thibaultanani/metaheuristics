@@ -99,7 +99,10 @@ def add_axis_max(maxScore, meanScore, iter, time_debut, x1, y1, y2, yTps):
 
 def cleanOut():
     final = os.path.dirname(os.getcwd()) + '/out/'
-    shutil.rmtree(final)
+    try:
+        shutil.rmtree(final)
+    except FileNotFoundError:
+        pass
 
 
 def createDirectory(path, folderName):
