@@ -282,7 +282,7 @@ if __name__ == '__main__':
 
     diff = Differential(dataset="als", target="survived",
                         metric="recall",
-                        list_exp=["EXP1", "EXP2"],
-                        pop=30, gen=10, cross_proba=0.5, F=1, strat='de_best_1')
+                        list_exp=["EXP1", "EXP2", "EXP3", "EXP4", "EXP5", "EXP6", "EXP7", "EXP8", "EXP9", "EXP10"],
+                        pop=30, gen=1000, cross_proba=0.5, F=1, strat='de_current_to_best_1')
 
     diff.init()

@@ -110,8 +110,8 @@ class Differential:
             pop = utility.create_population_feature(inds=self.n_pop, size=self.n_ind)
 
             # Choix de paramétrage
-            params_pool = [[1.0, 0.1], [1.0, 0.9], [0.8, 0.2], [1.0, 0.5]]
-            strats_pool = ['de_rand_1', 'de_rand_2', 'de_current_to_rand_1', 'de_best_1']
+            params_pool = [[1.0, 0.1], [1.0, 0.9], [0.8, 0.2]]
+            strats_pool = ['de_rand_1', 'de_rand_2', 'de_current_to_rand_1']
             n_pool = len(params_pool)
 
             scores, scoresA, scoresP, scoresR, scoresF, models, cols = \
@@ -262,6 +262,8 @@ class Differential:
 
 if __name__ == '__main__':
 
-    diff = Differential(dataset="als", target="survived", metric="recall", list_exp=["EXP1", "EXP2"], pop=30, gen=10)
+    diff = Differential(dataset="als", target="survived", metric="recall",
+                        list_exp=["EXP1", "EXP2", "EXP3", "EXP4", "EXP5", "EXP6", "EXP7", "EXP8", "EXP9", "EXP10"],
+                        pop=30, gen=1000)
 
     diff.init()

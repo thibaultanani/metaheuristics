@@ -344,7 +344,8 @@ class Genetic:
 
 if __name__ == '__main__':
 
-    gen = Genetic(dataset="als", target="survived", metric="recall", list_exp=["EXP1", "EXP2"],
-                  pop=30, gen=10, mut=5)
+    gen = Genetic(dataset="als", target="survived", metric="recall",
+                  list_exp=["EXP1", "EXP2", "EXP3", "EXP4", "EXP5", "EXP6", "EXP7", "EXP8", "EXP9", "EXP10"],
+                  pop=30, gen=1000, mut=5)
 
     gen.init()

@@ -318,7 +318,9 @@ class Differential:
 
 if __name__ == '__main__':
 
-    diff = Differential(dataset="als", target="survived", metric="recall", list_exp=["EXP1", "EXP2"], pop=30, gen=10,
+    diff = Differential(dataset="als", target="survived", metric="recall",
+                        list_exp=["EXP1", "EXP2", "EXP3", "EXP4", "EXP5", "EXP6", "EXP7", "EXP8", "EXP9", "EXP10"],
+                        pop=30, gen=1000,
                         t1=0.1, t2=0.1, Fl=0.1, Fu=0.9)
 
     diff.init()

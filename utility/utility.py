@@ -184,7 +184,7 @@ def create_population_knapsack(inds, size):
 # Validation croisée pour garantir que l'apprentissage
 # soit représentatif de l'ensemble des données
 def cross_validation(nfold, X, y, model, matrix):
-    k = model_selection.KFold(nfold)
+    k = model_selection.StratifiedKFold(nfold)
 
     y_test_lst = []
     y_pred_lst = []
@@ -260,7 +260,7 @@ def learning(n_class, data, target, method):
     else:
         model = LogisticRegression(solver='liblinear', C=10.0, class_weight='balanced')
 
-    matrix, y_test, y_pred = cross_validation(nfold=10, X=X, y=y, model=model, matrix=matrix)
+    matrix, y_test, y_pred = cross_validation(nfold=5, X=X, y=y, model=model, matrix=matrix)
 
     return accuracy_score(y_true=y_test, y_pred=y_pred), \
            precision_score(y_true=y_test, y_pred=y_pred, average="macro"), \

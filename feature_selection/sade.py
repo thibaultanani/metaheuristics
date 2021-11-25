@@ -278,10 +278,10 @@ class Differential:
                 x1, y1, y2, yTps = utility.add_axis(bestScore=bestScore, meanScore=mean_scores, iter=generation,
                                                     time_debut=time_debut, x1=x1, y1=y1, y2=y2, yTps=yTps)
 
-                utility.plot_knapsack(x1=x1, y1=y1, y2=y2, yTps=yTps, n_pop=self.n_pop, n_gen=self.n_gen,
+                utility.plot_feature(x1=x1, y1=y1, y2=y2, yTps=yTps, n_pop=self.n_pop, n_gen=self.n_gen,
                                       heuristic="Evolution différentielle (SADE)", folderName=folderName,
                                       path=self.path2, bestScore=bestScore, mean_scores=mean_scores,
-                                      time_total=time_debut.total_seconds())
+                                      time_total=time_debut.total_seconds(), metric=self.metric)
 
                 if bestScore > scoreMax:
                     scoreMax = bestScore
@@ -339,6 +339,8 @@ class Differential:
 
 if __name__ == '__main__':
 
-    diff = Differential(dataset="als", target="survived", metric="recall", list_exp=["EXP1", "EXP2"], pop=30, gen=10)
+    diff = Differential(dataset="als", target="survived", metric="recall",
+                        list_exp=["EXP1", "EXP2", "EXP3", "EXP4", "EXP5", "EXP6", "EXP7", "EXP8", "EXP9", "EXP10"],
+                        pop=30, gen=1000)
 
     diff.init()
