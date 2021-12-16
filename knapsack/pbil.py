@@ -232,8 +232,7 @@ class Pbil:
 
         return utility.res(heuristic="Apprentissage incrémental à base de population",
                            besties=bestiesLst, names=namesLst, iters=itersLst,
-                           times=timesLst, names2=names2Lst, path=self.path2,
-                           n_gen=self.n_gen, self=self)
+                           times=timesLst, names2=names2Lst, path=self.path2, dataset=self.dataset)
 
 
 if __name__ == '__main__':

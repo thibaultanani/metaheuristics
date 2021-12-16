@@ -179,9 +179,6 @@ class Differential:
                 # cross_probas_m = []
                 # F_probas_m = []
 
-                # Les indices des individus avec les scores les plus élevés
-                indices = (-np.array(scores)).argsort()[:pbest]
-
                 try:
                     pop_archive = np.vstack((pop, archive))
                 except ValueError:
@@ -189,6 +186,9 @@ class Differential:
 
                 # Création des mutants
                 for i in range(self.n_pop):
+
+                    # Les indices des individus avec les scores les plus élevés
+                    indices = (-np.array(scores)).argsort()[:pbest]
 
                     cross_proba = -1
                     while cross_proba > 1 or cross_proba < 0:
@@ -328,7 +328,7 @@ class Differential:
 if __name__ == '__main__':
 
     genetic = Differential(dataset='knapsack_test2', capacity=9906309440,
-                           list_exp=["EXP1"],
+                           list_exp=["EXP1", "EXP2", "EXP3", "EXP4", "EXP5", "EXP6", "EXP7", "EXP8", "EXP9", "EXP10"],
                            seed=42, pop=100, gen=1000, c=0.1, p=0.05)
 
     genetic.init()

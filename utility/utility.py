@@ -6,6 +6,9 @@ import os
 import shutil
 import matplotlib.pyplot as plt
 import multiprocessing
+import networkx as nx
+import math
+import difflib
 
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.svm import LinearSVC
@@ -16,6 +19,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
 from sklearn import model_selection
+from sklearn.utils import class_weight
 
 import warnings
 
@@ -81,6 +85,17 @@ def knapsack_add_list(scores, weights, inds, bestScorePro, bestWeightPro, bestIn
     return bestScore, bestWeight, bestInd, bestScorePro, bestWeightPro, bestIndsPro
 
 
+def conjecture_add_list(scores, inds, bestScorePro, bestIndsPro):
+    argmax = np.argmax(scores)
+    bestScore = scores[argmax]
+    bestInd = inds[argmax]
+
+    bestScorePro.append(bestScore)
+    bestIndsPro.append(bestInd)
+
+    return bestScore, bestInd, bestScorePro, bestIndsPro
+
+
 def add_axis(bestScore, meanScore, iter, time_debut, x1, y1, y2, yTps):
     x1.append(iter)
     y1.append(meanScore)
@@ -112,8 +127,8 @@ def createDirectory(path, folderName):
     os.makedirs(final)
 
 
-def my_print_feature(print_out, mode, mean, bestScore, numCols, time_exe, time_total, iter):
-    display = mode + \
+def my_print_feature(print_out, mode, method, mean, bestScore, numCols, time_exe, time_total, iter):
+    display = mode + " [" + method + "]" + \
         " génération: " + str(iter) + \
         " moyenne: " + str(mean) + \
         " meilleur: " + str(bestScore) + \
@@ -138,6 +153,18 @@ def my_print_knapsack(print_out, mode, mean, bestScore, bestWeight, time_exe, ti
     return print_out
 
 
+def my_print_conjecture(print_out, mode, mean, bestScore, time_exe, time_total, iter):
+    display = mode + \
+        " génération: " + str(iter) + \
+        " moyenne: " + str(mean) + \
+        " meilleur: " + str(bestScore) + \
+        " temps exe: " + str(time_exe) + \
+        " temps total: " + str(time_total)
+    print_out = print_out + display
+    print(display)
+    return print_out
+
+
 def isNumber(s):
     try:
         return float(s)
@@ -149,6 +176,14 @@ def getNumberdecomposition(total):
     part1 = random.randint(1, total - 1)
     part2 = total - part1
     return [part1, part2]
+
+
+def getMethod(method):
+    words = ['lr', 'svm', 'knn', 'rdc', 'gnb']
+    try:
+        return difflib.get_close_matches(method, words)[0]
+    except:
+        return 'lr'
 
 
 def f7(seq):
@@ -169,6 +204,26 @@ def create_population_feature(inds, size):
         pop[i, 0:random.randint(0, size)] = True
         np.random.shuffle(pop[i])
     return pop
+
+
+def create_population_feature2(inds, size, proba):
+    pop = np.zeros((inds, size), dtype=bool)
+    for i in range(inds):
+        pop[i] = np.random.rand(size) <= [proba]*size
+    return pop
+
+
+def create_population_feature_bar(inds, pop):
+    pop_bar = []
+    for i in range(inds):
+        tmp = []
+        for j in range(len(pop[i])):
+            if j < 90:
+                tmp.append(pop[i][j])
+            else:
+                tmp.append(not pop[i][j])
+        pop_bar.append(tmp)
+    return pop_bar
 
 
 def create_population_knapsack(inds, size):
@@ -195,7 +250,13 @@ def cross_validation(nfold, X, y, model, matrix):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
-        model.fit(X_train, y_train)
+        sample = class_weight.compute_sample_weight('balanced', y_train)
+
+        try:
+            model.fit(X_train, y_train, sample_weight=sample)
+        except TypeError:
+            model.fit(X_train, y_train)
+
         y_pred = model.predict(X_test)
 
         # Somme des matrices de confusions
@@ -242,13 +303,13 @@ def learning(n_class, data, target, method):
     matrix = np.zeros((n_class, n_class), dtype=int)
 
     if method == 'svm':
-        model = LinearSVC(class_weight='balanced', random_state=1)
+        model = LinearSVC(random_state=1)
     elif method == 'knn':
         model = KNeighborsClassifier(n_neighbors=5)
     elif method == 'rdc':
-        model = RandomForestClassifier(n_estimators=30, bootstrap=False, class_weight='balanced', random_state=1)
+        model = RandomForestClassifier(n_estimators=30, random_state=1)
     elif method == 'dtc':
-        model = DecisionTreeClassifier(class_weight='balanced', random_state=1)
+        model = DecisionTreeClassifier(random_state=1)
     elif method == 'etc':
         model = ExtraTreesClassifier(class_weight='balanced', random_state=1)
     elif method == 'lda':
@@ -258,7 +319,7 @@ def learning(n_class, data, target, method):
     elif method == 'rrc':
         model = RidgeClassifier(class_weight='balanced')
     else:
-        model = LogisticRegression(solver='liblinear', C=10.0, class_weight='balanced')
+        model = LogisticRegression(solver='liblinear', C=10.0)
 
     matrix, y_test, y_pred = cross_validation(nfold=5, X=X, y=y, model=model, matrix=matrix)
 
@@ -282,7 +343,7 @@ def fitness_feature(n_class, d, pop, target_name, metric, method):
             ind[random.randint(0, len(ind) - 1)] = True
         data, cols = preparation(data=d, ind=ind, target=target_name)
         accuracy, precision, recall, f_score, matrix = learning(n_class=n_class, data=data, target=target_name,
-                                                               method=method)
+                                                                method=method)
         if metric == 'accuracy' or metric == 'exactitude':
             score_list.append(accuracy)
         elif metric == 'recall' or metric == 'rappel':
@@ -305,7 +366,7 @@ def fitness_ind_feature(n_class, d, ind, target_name, metric, method):
         ind[random.randint(0, len(ind) - 1)] = True
     data, cols = preparation(data=d, ind=ind, target=target_name)
     accuracy, precision, recall, f_score, matrix = learning(n_class=n_class, data=data, target=target_name,
-                                                           method=method)
+                                                            method=method)
     if metric == 'accuracy' or metric == 'exactitude':
         score = accuracy
     elif metric == 'recall' or metric == 'rappel':
@@ -349,6 +410,81 @@ def fitness_ind_knapsack(self, ind):
         res = 0
 
     return res, weight
+
+
+def calcScore(pop, n_vertices):
+
+    scores = []
+    inds = []
+
+    for ind in pop:
+        G = nx.Graph()
+        G.add_nodes_from(list(range(n_vertices)))
+        count = 0
+        for i in range(n_vertices):
+            for j in range(i + 1, n_vertices):
+                if ind[count] == 1:
+                    G.add_edge(i, j)
+                count += 1
+
+        evals = np.linalg.eigvalsh(nx.adjacency_matrix(G).todense())
+        evalsRealAbs = np.zeros_like(evals)
+        for i in range(len(evals)):
+            evalsRealAbs[i] = abs(evals[i])
+        lambda1 = max(evalsRealAbs)
+
+        maxMatch = nx.max_weight_matching(G)
+        mu = len(maxMatch)
+
+        myScore = math.sqrt(n_vertices - 1) + 1 - lambda1 - mu
+
+        if not (nx.is_connected(G)):
+            myScore = -100000
+
+        if myScore > 0:
+            print(ind)
+            nx.draw_kamada_kawai(G)
+            plt.show()
+            # exit()
+
+        scores.append(myScore)
+        inds.append(ind)
+
+    return scores, inds
+
+
+def calcScore_ind(ind, n_vertices):
+
+    G = nx.Graph()
+    G.add_nodes_from(list(range(n_vertices)))
+    count = 0
+    for i in range(n_vertices):
+        for j in range(i + 1, n_vertices):
+            if ind[count] == 1:
+                G.add_edge(i, j)
+            count += 1
+
+    evals = np.linalg.eigvalsh(nx.adjacency_matrix(G).todense())
+    evalsRealAbs = np.zeros_like(evals)
+    for i in range(len(evals)):
+        evalsRealAbs[i] = abs(evals[i])
+    lambda1 = max(evalsRealAbs)
+
+    maxMatch = nx.max_weight_matching(G)
+    mu = len(maxMatch)
+
+    myScore = math.sqrt(n_vertices - 1) + 1 - lambda1 - mu
+
+    if not (nx.is_connected(G)):
+        myScore = -100000
+
+    if myScore > 0:
+        print(ind)
+        nx.draw_kamada_kawai(G)
+        plt.show()
+        exit()
+
+    return myScore
 
 
 def queues_init():
@@ -430,6 +566,36 @@ def plot_knapsack(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path, b
     ax.grid()
     ax.legend(labels=["moyenne des " + str(int(n_pop / 2)) + " meilleurs: " + "{:.0f}".format(mean_scores),
                       "Le meilleur: " + "{:.0f}".format(bestScore)],
+              loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plot_' + str(n_gen) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig)
+
+    fig3, ax3 = plt.subplots()
+    ax3.plot(x1, yTps)
+    ax.set_title("Evolution du score par génération (" + folderName + ")" + "\n" + heuristic + "\n")
+    ax.set_xlabel("génération")
+    ax3.set_ylabel("Temps en seconde")
+    ax3.grid()
+    ax3.legend(labels=["Temps total: " + "{:.0f}".format(time_total)],
+               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotTps_' + str(n_gen) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig3.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig3)
+
+
+def plot_conjecture(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path, bestScore, mean_scores, time_total):
+    fig, ax = plt.subplots()
+    ax.plot(x1, y1)
+    ax.plot(x1, y2)
+    ax.set_title("Evolution du score par génération (" + folderName + ")" + "\n" + heuristic + "\n")
+    ax.set_xlabel("génération")
+    ax.set_ylabel("score")
+    ax.grid()
+    ax.legend(labels=["moyenne des " + str(int(n_pop / 2)) + " meilleurs: " + "{:.3f}".format(mean_scores),
+                      "Le meilleur: " + "{:.3f}".format(bestScore)],
               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
     a = os.path.join(os.path.join(path, folderName), 'plot_' + str(n_gen) + '.png')
     b = os.path.join(os.getcwd(), a)

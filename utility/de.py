@@ -1,3 +1,5 @@
+import random
+
 import utility.utility as utility
 import utility.strategy as strategy
 
@@ -14,10 +16,29 @@ def crossover(n_ind, ind, mutant, cross_proba):
 
     trial = np.where(cross_points, mutant, ind)
 
-    idxs = [idx for idx in range(len(ind))]
+    idxs = [idx for idx in range(n_ind)]
     selected = np.random.choice(idxs, 1, replace=False)
 
     trial[selected] = not trial[selected]
+
+    return trial
+
+
+def crossover2(n_ind, ind, mutant, cross_proba, pop):
+    cross_points = np.random.rand(n_ind) <= cross_proba
+
+    trial = np.where(cross_points, mutant, ind)
+
+    idxs = [idx for idx in range(n_ind)]
+    selected = np.random.choice(idxs, 1, replace=False)
+
+    trial[selected] = not trial[selected]
+
+    while trial.tolist() in pop.tolist():
+        rand = random.randint(1, int(n_ind/10))
+        mutate_index = random.sample(range(0, n_ind), rand)
+        for x in mutate_index:
+            trial[x] = not trial[x]
 
     return trial
 
@@ -47,6 +68,76 @@ def mutate_jade(n_ind, F, pop, pInd, ind_pos, pop_archive):
 
     mutant = pop[ind_pos].astype(np.float32) + F * (pInd.astype(np.float32) - pop[ind_pos].astype(np.float32)) + \
              F * (xr1.astype(np.float32) - xr2.astype(np.float32))
+
+    for i in range(n_ind):
+        if mutant[i] < 0.5:
+            mutant[i] = 0
+        else:
+            mutant[i] = 1
+
+    mutant = mutant.astype(bool)
+
+    return mutant
+
+
+def mutate_new_jade(n_ind, pop, pInd, ind_pos, ind_pbest):
+
+    idxs = [idx for idx in range(len(pop)) if idx != ind_pos and idx != ind_pbest]
+    selected = np.random.choice(idxs, 2, replace=False)
+    xr1, xr2 = pop[selected]
+
+    rand = np.random.rand(n_ind) <= [0.5]*n_ind
+
+    mutant = []
+
+    for i in range(n_ind):
+        mutant.append(((pInd[i] ^ xr2[i]) and rand[i]) or (not (pInd[i] ^ xr2[i]) and pInd[i]))
+
+    return mutant
+
+
+def mutate_new_jade2(n_ind, F, pop, pInd, pbilInd, ind_pos, pop_archive, ind_pbest, CR):
+
+    idxs = [idx for idx in range(len(pop)) if idx != ind_pos and idx != ind_pbest]
+    selected = np.random.choice(idxs, 2, replace=False)
+    xr1, xr2 = pop[selected]
+
+    rand = np.random.rand(n_ind) <= [0.5]*n_ind
+
+    mutant = []
+    cross_choices = []
+
+    for i in range(n_ind):
+        # mutant.append(((xr1[i] ^ xr2[i]) and rand[i]) or (not (xr1[i] ^ xr2[i]) and xr1[i]))
+        mutant.append(((pInd[i] ^ xr2[i]) and rand[i]) or (not (pInd[i] ^ xr2[i]) and pInd[i]))
+        if pInd[i] ^ xr2[i]:
+            cross_choices.append(CR[0])
+        else:
+            cross_choices.append(CR[1])
+
+
+    # mutant = pInd.astype(np.float32) + F * (xr1.astype(np.float32) - xr2.astype(np.float32))
+
+    '''
+    for i in range(n_ind):
+        if mutant[i] < 0.5:
+            mutant[i] = 0
+        else:
+            mutant[i] = 1
+
+    mutant = mutant.astype(bool)
+    '''
+
+    return mutant, cross_choices
+
+
+def mutate_new(n_ind, F, pop, bestInd, pInd, ind_pos):
+
+    idxs = [idx for idx in range(len(pop)) if idx != ind_pos]
+    selected = np.random.choice(idxs, 1, replace=False)
+    xr1 = pop[selected[0]]
+
+    mutant = bestInd.astype(np.float32) + F * (pInd.astype(np.float32) - xr1.astype(np.float32))
 
     for i in range(n_ind):
         if mutant[i] < 0.5:
