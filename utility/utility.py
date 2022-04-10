@@ -10,8 +10,7 @@ import networkx as nx
 import math
 import difflib
 
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
-from sklearn.svm import LinearSVC
+from sklearn.linear_model import LogisticRegression, RidgeClassifier, SGDClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -72,6 +71,33 @@ def feature_add_list(scores, models, inds, cols, scoresA, scoresP, scoresR, scor
            bestScorePro, bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro
 
 
+def feature_add_list_plus(scores, models, inds, cols, scoresA, scoresP, scoresR, scoresF, bestScorePro, bestModelPro,
+                          bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro):
+    argmax = np.argmax(scores)
+    argmin = np.argmin(scores)
+    bestScore = scores[argmax]
+    worstScore = scores[argmin]
+    bestModel = models[argmax]
+    bestInd = inds[argmax]
+    bestCols = cols[argmax]
+    bestScoreA = scoresA[argmax]
+    bestScoreP = scoresP[argmax]
+    bestScoreR = scoresR[argmax]
+    bestScoreF = scoresF[argmax]
+
+    bestScorePro.append(bestScore)
+    bestModelPro.append(bestModel)
+    bestIndsPro.append(bestInd)
+    bestColsPro.append(bestCols)
+    bestAPro.append(bestScoreA)
+    bestPPro.append(bestScoreP)
+    bestRPro.append(bestScoreR)
+    bestFPro.append(bestScoreF)
+
+    return bestScore, worstScore, bestModel, bestInd, bestCols, bestScoreA, bestScoreP, bestScoreR, bestScoreF, \
+           bestScorePro, bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro
+
+
 def knapsack_add_list(scores, weights, inds, bestScorePro, bestWeightPro, bestIndsPro):
     argmax = np.argmax(scores)
     bestScore = scores[argmax]
@@ -83,6 +109,28 @@ def knapsack_add_list(scores, weights, inds, bestScorePro, bestWeightPro, bestIn
     bestIndsPro.append(bestInd)
 
     return bestScore, bestWeight, bestInd, bestScorePro, bestWeightPro, bestIndsPro
+
+
+def filter_add_list(score, model, col, accuracy, precision, recall, fscore, bestScorePro, bestModelPro,
+                    bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro):
+    bestScore = score
+    bestModel = model
+    bestCols = col
+    bestScoreA = accuracy
+    bestScoreP = precision
+    bestScoreR = recall
+    bestScoreF = fscore
+
+    bestScorePro.append(bestScore)
+    bestModelPro.append(bestModel)
+    bestColsPro.append(bestCols)
+    bestAPro.append(bestScoreA)
+    bestPPro.append(bestScoreP)
+    bestRPro.append(bestScoreR)
+    bestFPro.append(bestScoreF)
+
+    return bestScore, bestModel, bestCols, bestScoreA, bestScoreP, bestScoreR, bestScoreF, \
+           bestScorePro, bestModelPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro
 
 
 def conjecture_add_list(scores, inds, bestScorePro, bestIndsPro):
@@ -112,8 +160,25 @@ def add_axis_max(maxScore, meanScore, iter, time_debut, x1, y1, y2, yTps):
     return x1, y1, y2, yTps
 
 
-def cleanOut():
-    final = os.path.dirname(os.getcwd()) + '/out/'
+def add_axis_vars(bestScore, meanScore, iter, time_debut, vars, x1, y1, y2, yTps, yVars):
+    x1.append(iter)
+    y1.append(meanScore)
+    y2.append(bestScore)
+    yTps.append(time_debut.total_seconds())
+    yVars.append(vars)
+    return x1, y1, y2, yTps, yVars
+
+
+def add_axis_filter(bestScore, k, time_debut, vars, x1, y1, yTps, yVars):
+    x1.append(k)
+    y1.append(bestScore)
+    yTps.append(time_debut.total_seconds())
+    yVars.append(vars)
+    return x1, y1, yTps, yVars
+
+
+def cleanOut(path):
+    final = path
     try:
         shutil.rmtree(final)
     except FileNotFoundError:
@@ -140,12 +205,40 @@ def my_print_feature(print_out, mode, method, mean, bestScore, numCols, time_exe
     return print_out
 
 
+def new_my_print_feature(print_out, mode, method, mean, bestScore, numCols, time_exe, time_total, entropy, iter, val):
+    display = mode + " [" + method + "]" + \
+        " génération: " + str(iter) + \
+        " moyenne: " + str(mean) + \
+        " meilleur: " + str(bestScore) + \
+        " variables: " + str(numCols) + \
+        " temps exe: " + str(time_exe) + \
+        " temps total: " + str(time_total) + \
+        " entropie: " + str(sum(entropy)/len(entropy)) + \
+        " val: " + str(val)
+    print_out = print_out + display
+    print(display)
+    return print_out
+
+
 def my_print_knapsack(print_out, mode, mean, bestScore, bestWeight, time_exe, time_total, iter):
     display = mode + \
         " génération: " + str(iter) + \
         " moyenne: " + str(mean) + \
         " meilleur: " + str(bestScore) + \
         " poids: " + str(bestWeight) + \
+        " temps exe: " + str(time_exe) + \
+        " temps total: " + str(time_total)
+    print_out = print_out + display
+    print(display)
+    return print_out
+
+
+def my_print_filter(print_out, mode, method, score, numCols, time_exe, time_total, stats, k):
+    display = mode + " [" + method + "]" + \
+        " méthode: " + str(stats) + \
+        " k: " + str(k) + \
+        " valeur: " + str(score) + \
+        " var max: " + str(numCols) + \
         " temps exe: " + str(time_exe) + \
         " temps total: " + str(time_total)
     print_out = print_out + display
@@ -186,6 +279,14 @@ def getMethod(method):
         return 'lr'
 
 
+def getStats(stats):
+    words = ['reliefF', 'mrmr', 'mutual_info', 'chi2', 'anova']
+    try:
+        return difflib.get_close_matches(stats, words)[0]
+    except:
+        return 'reliefF'
+
+
 def f7(seq):
     seen = set()
     seen_add = seen.add
@@ -213,16 +314,28 @@ def create_population_feature2(inds, size, proba):
     return pop
 
 
-def create_population_feature_bar(inds, pop):
-    pop_bar = []
+def new_create_population_feature(inds, size, stats_cols, data_cols):
+    pop = np.zeros((inds, size), dtype=bool)
+    half = int(inds/3)
     for i in range(inds):
-        tmp = []
-        for j in range(len(pop[i])):
-            if j < 90:
-                tmp.append(pop[i][j])
-            else:
-                tmp.append(not pop[i][j])
-        pop_bar.append(tmp)
+        if i > half:
+            pop[i] = np.random.rand(size) <= [random.uniform(0.0, 1.0)] * size
+        else:
+            k = random.randint(1, size)
+            for j in range(len(data_cols)):
+                if data_cols[j] in stats_cols[0:k]:
+                    pop[i][j] = True
+                else:
+                    pop[i][j] = False
+    for i in range(inds):
+        pop[i+inds] = ~pop[i]
+    return pop
+
+
+def create_population_feature_bar(pop):
+    pop_bar = np.zeros((len(pop), len(pop[0])), dtype=bool)
+    for i in range(len(pop)):
+        pop_bar[i] = ~pop[i]
     return pop_bar
 
 
@@ -303,7 +416,43 @@ def learning(n_class, data, target, method):
     matrix = np.zeros((n_class, n_class), dtype=int)
 
     if method == 'svm':
-        model = LinearSVC(random_state=1)
+        # model = LinearSVC(random_state=1)
+        # model = SVC(kernel='linear', random_state=1)
+        model = SGDClassifier(random_state=1)
+    elif method == 'knn':
+        model = KNeighborsClassifier(n_neighbors=5)
+    elif method == 'rdc':
+        model = RandomForestClassifier(n_estimators=30, random_state=1)
+    elif method == 'dtc':
+        model = DecisionTreeClassifier(random_state=1)
+    elif method == 'etc':
+        model = ExtraTreesClassifier(class_weight='balanced', random_state=1)
+    elif method == 'lda':
+        model = LinearDiscriminantAnalysis()
+    elif method == 'gnb':
+        model = GaussianNB()
+    elif method == 'rrc':
+        model = RidgeClassifier(class_weight='balanced')
+    else:
+        model = LogisticRegression(solver='liblinear', C=10.0)
+
+    matrix, y_test, y_pred = cross_validation(nfold=5, X=X, y=y, model=model, matrix=matrix)
+
+    return accuracy_score(y_true=y_test, y_pred=y_pred), \
+           precision_score(y_true=y_test, y_pred=y_pred, average="macro"), \
+           recall_score(y_true=y_test, y_pred=y_pred, average="macro"), \
+           f1_score(y_true=y_test, y_pred=y_pred, average="macro"), matrix
+
+
+def learning_filter(n_class, X, y, method):
+
+    # Initialise une matrice carrée de zéros de taille 2
+    matrix = np.zeros((n_class, n_class), dtype=int)
+
+    if method == 'svm':
+        # model = LinearSVC(random_state=1)
+        # model = SVC(kernel='linear', random_state=1)
+        model = SGDClassifier(random_state=1)
     elif method == 'knn':
         model = KNeighborsClassifier(n_neighbors=5)
     elif method == 'rdc':
@@ -412,6 +561,19 @@ def fitness_ind_knapsack(self, ind):
     return res, weight
 
 
+def fitness_filter(n_class, X, y, metric, method):
+    accuracy, precision, recall, f_score, matrix = learning_filter(n_class=n_class, X=X, y=y, method=method)
+    if metric == 'accuracy' or metric == 'exactitude':
+        score = accuracy
+    elif metric == 'recall' or metric == 'rappel':
+        score = recall
+    elif metric == 'precision' or metric == 'précision':
+        score = precision
+    else:
+        score = accuracy
+    return score, accuracy, precision, recall, f_score, matrix
+
+
 def calcScore(pop, n_vertices):
 
     scores = []
@@ -487,18 +649,44 @@ def calcScore_ind(ind, n_vertices):
     return myScore
 
 
+def get_entropy(pop, inds, size):
+    truth_list = []
+    false_list = []
+    for i in range(size):
+        transpose = [row[i] for row in pop]
+        somme = transpose.count(True) / inds
+        truth_list.append(somme)
+        false_list.append(1 - somme)
+    entropy = []
+    for j in range(size):
+        try:
+            log_true = truth_list[j] * math.log(truth_list[j])
+        except ValueError:
+            log_true = 0.0
+        try:
+            log_false = false_list[j] * math.log(false_list[j])
+        except ValueError:
+            log_false = 0.0
+        entropy.append(-(log_true + log_false))
+    return entropy
+
+
 def queues_init():
-    return multiprocessing.Queue(), multiprocessing.Queue(), multiprocessing.Queue(), multiprocessing.Queue(), \
-           multiprocessing.Queue()
+    return multiprocessing.Manager().Queue(), multiprocessing.Manager().Queue(), multiprocessing.Manager().Queue(),\
+           multiprocessing.Manager().Queue(), multiprocessing.Manager().Queue(), multiprocessing.Manager().Queue(),\
+           multiprocessing.Manager().Queue()
 
 
-def queues_put_feature(y2, folderName, scoreMax, iter, yTps, time, besties, names, names2, iters, times):
+def queues_put_feature(y2, folderName, scoreMax, iter, yTps, yVars, time, besties, feature,
+                       names, names2, names3, iters, times, features):
     besties.put(y2)
     names.put(folderName + ": " + "{:.2%}".format(scoreMax))
     iters.put(iter)
     times.put(yTps)
-    names2.put(folderName + ": " + "{:.2%}".format(time))
-    return besties, names, iters, times, names2
+    names2.put(folderName + ": " + str(time))
+    features.put(yVars)
+    names3.put(folderName + ": " + str(feature))
+    return besties, names, iters, times, names2, features, names3
 
 
 def queues_put_knapsack(y2, folderName, scoreMax, iter, yTps, time, besties, names, names2, iters, times):
@@ -510,22 +698,26 @@ def queues_put_knapsack(y2, folderName, scoreMax, iter, yTps, time, besties, nam
     return besties, names, iters, times, names2
 
 
-def queues_get(n_process, besties, names, names2, iters, times):
+def queues_get(n_process, besties, names, names2, iters, times, features, names3):
     bestiesLst = []
     namesLst = []
     itersLst = []
     timesLst = []
     names2Lst = []
+    featuresLst = []
+    names3Lst = []
     for i in range(n_process):
         bestiesLst.append(besties.get())
         namesLst.append(names.get())
         names2Lst.append(names2.get())
         itersLst.append(iters.get())
         timesLst.append(times.get())
-    return bestiesLst, namesLst, itersLst, timesLst, names2Lst
+        featuresLst.append(features.get())
+        names3Lst.append(names3.get())
+    return bestiesLst, namesLst, itersLst, timesLst, names2Lst, featuresLst, names3Lst
 
 
-def plot_feature(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path, bestScore, mean_scores, time_total,
+def plot_feature(x1, y1, y2, yTps, yVars, n_pop, n_gen, heuristic, folderName, path, bestScore, mean_scores, time_total,
                  metric):
     fig, ax = plt.subplots()
     ax.plot(x1, y1)
@@ -537,15 +729,28 @@ def plot_feature(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path, be
     ax.legend(labels=["moyenne des " + str(int(n_pop / 2)) + " meilleurs: " + "{:.2%}".format(mean_scores),
                       "Le meilleur: " + "{:.2%}".format(bestScore)],
               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
-    a = os.path.join(os.path.join(path, folderName), 'plot_' + str(n_gen) + '.png')
+    a = os.path.join(os.path.join(path, folderName), 'plotScore_' + str(n_gen) + '.png')
     b = os.path.join(os.getcwd(), a)
     fig.savefig(os.path.abspath(b), bbox_inches="tight")
     plt.close(fig)
 
+    fig2, ax2 = plt.subplots()
+    ax2.plot(x1, yVars)
+    ax2.set_title("Evolution du nombre de variables par génération (" + folderName + ")" + "\n" + heuristic + "\n")
+    ax2.set_xlabel("génération")
+    ax2.set_ylabel("nombres de variables")
+    ax2.grid()
+    ax2.legend(labels=["Nombre de variable maximal: " + str(yVars[len(yVars)-1])],
+               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotVars_' + str(n_gen) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig2.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig2)
+
     fig3, ax3 = plt.subplots()
     ax3.plot(x1, yTps)
-    ax.set_title("Evolution du score par génération (" + folderName + ")" + "\n" + heuristic + "\n")
-    ax.set_xlabel("génération")
+    ax3.set_title("Evolution du temps en seconde par génération (" + folderName + ")" + "\n" + heuristic + "\n")
+    ax3.set_xlabel("génération")
     ax3.set_ylabel("Temps en seconde")
     ax3.grid()
     ax3.legend(labels=["Temps total: " + "{:0f}".format(time_total)],
@@ -586,6 +791,36 @@ def plot_knapsack(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path, b
     plt.close(fig3)
 
 
+def plot_filter(x1, y1, yTps, n_k, stats, folderName, path, bestScore, time_total, metric):
+    fig, ax = plt.subplots()
+    ax.plot(x1, y1)
+    ax.set_title("Evolution du score par nombre de variable sélectionnées (" + folderName + ")" +
+                 "\n" + stats + "\n")
+    ax.set_xlabel("génération")
+    ax.set_ylabel(metric)
+    ax.grid()
+    ax.legend(labels=["Le meilleur: " + "{:.2%}".format(bestScore)],
+              loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plot_' + str(n_k) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig)
+
+    fig3, ax3 = plt.subplots()
+    ax3.plot(x1, yTps)
+    ax.set_title("Evolution du temps par nombre de variable sélectionnées (" + folderName + ")" +
+                 "\n" + stats + "\n")
+    ax.set_xlabel("génération")
+    ax3.set_ylabel("Temps en seconde")
+    ax3.grid()
+    ax3.legend(labels=["Temps total: " + "{:0f}".format(time_total)],
+               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotTps_' + str(n_k) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig3.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig3)
+
+
 def plot_conjecture(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path, bestScore, mean_scores, time_total):
     fig, ax = plt.subplots()
     ax.plot(x1, y1)
@@ -616,20 +851,24 @@ def plot_conjecture(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path,
     plt.close(fig3)
 
 
-def res(heuristic, besties, names, iters, times, names2, path, dataset):
+def res(heuristic, besties, names, iters, times, names2, features, names3, path, dataset):
 
     besties = np.array(besties)
     names = np.array(names)
     times = np.array(times)
     names2 = np.array(names2)
+    features = np.array(features)
+    names3 = np.array(names3)
 
     indices = names.argsort()
     besties = besties[indices].tolist()
     names = names[indices].tolist()
     times = times[indices].tolist()
     names2 = names2[indices].tolist()
+    features = features[indices].tolist()
+    names3 = names3[indices].tolist()
 
-    folderName = "Total"
+    folderName = "Total_" + dataset
     createDirectory(path, folderName)
     cmap = ['dodgerblue', 'red', 'springgreen', 'gold', 'orange', 'deeppink', 'darkviolet', 'blue', 'dimgray',
             'salmon', 'green', 'cyan', 'indigo', 'crimson', 'chocolate', 'black']
@@ -664,3 +903,43 @@ def res(heuristic, besties, names, iters, times, names2, path, dataset):
     b = os.path.join(os.getcwd(), a)
     fig2.savefig(os.path.abspath(b), bbox_inches="tight")
     plt.close(fig2)
+
+    fig3, ax3 = plt.subplots()
+    i = 0
+    for val in features:
+        ax3.plot(list(range(0, len(val))), val, color=cmap[i])
+        i = i + 1
+    ax3.set_title("Evolution du nombre de variable par génération" + "\n" + heuristic + "\n" + dataset)
+    ax3.set_xlabel("génération")
+    ax3.set_ylabel("Nombre de variables")
+    ax3.grid()
+    ax3.legend(labels=names3,
+               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotVars_' + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig3.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig3)
+
+
+def plot_crossover(x1, cptCBlst, cptCElst, cptCBClst, cptNCEClst, cptNolst, n_gen, heuristic, folderName, path, metric):
+    fig, ax = plt.subplots()
+    cmap = ['dodgerblue', 'red', 'springgreen', 'gold', 'orange', 'deeppink', 'darkviolet', 'blue', 'dimgray',
+            'salmon', 'green', 'cyan', 'indigo', 'crimson', 'chocolate', 'black']
+    ax.plot(x1, cptCBlst, color=cmap[0])
+    ax.plot(x1, cptCElst, color=cmap[1])
+    ax.plot(x1, cptCBClst, color=cmap[2])
+    ax.plot(x1, cptNCEClst, color=cmap[3])
+    ax.plot(x1, cptNolst, color=cmap[4])
+    ax.set_title("Evolution du meilleur croisement par génération (" + folderName + ")" + "\n" + heuristic + "\n")
+    ax.set_xlabel("génération")
+    ax.set_ylabel(metric)
+    ax.grid()
+    ax.legend(labels=["binomial: " + str(sum(cptCBlst)), "exponentiel: " + str(sum(cptCElst)),
+                      "consécutif binomial: " + str(sum(cptCBClst)),
+                      "non cosécutif exponentiel: " + str(sum(cptNCEClst)),
+                      "pas de croisement: " + str(sum(cptNolst))],
+              loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotCR_' + str(n_gen) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig)

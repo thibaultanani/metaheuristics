@@ -8,7 +8,11 @@ import os
 import heapq
 import psutil
 import time
+import random
+import math
 from datetime import timedelta
+from scipy import stats
+
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -31,24 +35,19 @@ class Differential:
               - "GNB": gaussian naive bayes
     pop: [int] Number of solutions evaluated per generation
     gen: [int] Number of generations/iterations for the algorithm
-    cross_proba: [float (0.0:1.0)] Crossover probability
-    F: [float (0.0:2.0)] F factor
-    strat: [string] Mutation strat [de_rand_1, de_best_1, de_current_to_best_1, de_rand_to_best_1,
-                                    de_rand_2, de_best_2, de_current_to_best_2, de_rand_to_best_2]
+    learning_rate: [float (0.0:1.0)] Speed at which the crossover probability is going to converge toward 0.0 or 1.0
     """
+    def __init__(self, dataset, target, metric, list_exp, pop, gen, learning_rate, alpha):
 
-    def __init__(self, dataset, target, metric, list_exp, pop, gen, cross_proba, F, strat):
-
-        self.heuristic = "Differential"
+        self.heuristic = "BPLDE"
         self.dataset = dataset
         self.target = target
         self.metric = metric
         self.list_exp = list_exp
         self.n_pop = pop
         self.n_gen = gen
-        self.cross_proba = cross_proba
-        self.F = F
-        self.strat = strat
+        self.learning_rate = learning_rate
+        self.alpha = alpha
         self.path1 = os.path.dirname(os.getcwd()) + '/in/'
         self.path2 = os.path.dirname(os.getcwd()) + '/out/' + self.heuristic + '/' + dataset
         self.data = utility.read(filename=(self.path1 + dataset))
@@ -58,19 +57,29 @@ class Differential:
         self.n_ind = len(self.cols)
         utility.cleanOut(path=self.path2)
 
-    def write_res(self, folderName, y1, y2, colMax, bestScorePro,
+    def update_param(self, muCR, SCR):
+        try:
+            muCR = (1 - self.learning_rate) * muCR + self.learning_rate * (sum(SCR)/len(SCR))
+        except ZeroDivisionError:
+            cross_proba = -1
+            while cross_proba > 1 or cross_proba < 0:
+                cross_proba = stats.norm.rvs(loc=muCR, scale=0.1)
+            muCR = (1 - self.learning_rate) * muCR + self.learning_rate * cross_proba
+        return muCR
+
+    def write_res(self, folderName, probas, y1, y2, colMax, bestScorePro,
                   bestAPro, bestPPro, bestRPro, bestFPro, bestModelPro,
                   bestScore, bestScoreA, bestScoreP, bestScoreR,
                   bestScoreF, bestModel, bestInd, debut, out, yTps, yVars, method):
         a = os.path.join(os.path.join(self.path2, folderName), 'resultat.txt')
         f = open(a, "w")
-        string = "heuristique: Evolution différentielle" + os.linesep + \
+        string = "heuristique: Evolution différentielle progressive binaire" + os.linesep + \
                  "méthode: " + str(method) + os.linesep + \
                  "population: " + str(self.n_pop) + os.linesep + \
                  "générations: " + str(self.n_gen) + os.linesep + \
-                 "probabilité de croisement: " + str(self.cross_proba) + os.linesep +\
-                 "F: " + str(self.F) + os.linesep +\
-                 "stratégie de mutation: " + str(self.strat) + os.linesep +\
+                 "taux d'apprentissage: " + str(self.learning_rate) + os.linesep + \
+                 "paramètre alpha: " + str(self.alpha) + os.linesep + \
+                 "probabilité de croisements: " + str(probas) + os.linesep + \
                  "moyenne: " + str(y1) + os.linesep + "meilleur: " + str(y2) + os.linesep + \
                  "temps: " + str(yTps) + os.linesep + \
                  "nombre de variables: " + str(yVars) + os.linesep + \
@@ -106,30 +115,74 @@ class Differential:
             utility.createDirectory(path=self.path2, folderName=folderName)
 
             # Les axes pour le graphique
-            x1, y1, y2, yTps, yVars = [], [], [], [], []
+            x1 = []
+            y1 = []
+            y2 = []
+            yTps = []
+            yVars = []
 
-            scoreMax, modelMax, indMax, colMax, scoreAMax, scorePMax, scoreRMax, scoreFMax = 0, 0, 0, 0, 0, 0, 0, 0
+            scoreMax = 0
+            modelMax = 0
+            indMax = 0
+            colMax = 0
+            scoreAMax = 0
+            scorePMax = 0
+            scoreRMax = 0
+            scoreFMax = 0
 
             # Progression des meilleurs éléments
-            bestScorePro, bestModelPro, bestColsPro, bestIndsPro, bestAPro, bestPPro, bestRPro, bestFPro =\
-                [], [], [], [], [], [], [], []
+            bestScorePro = []
+            bestModelPro = []
+            bestColsPro = []
+            bestIndsPro = []
+            bestAPro = []
+            bestPPro = []
+            bestRPro = []
+            bestFPro = []
 
             # Mesurer le temps d'execution
             instant = time.time()
 
+            # Initalise les paramètres
+            muCR = 0.5
+            muCRs = []
+
             # Initialise la population
             pop = utility.create_population_feature(inds=self.n_pop, size=self.n_ind)
+
+            # Initialiser l'archive
+            archive = []
 
             scores, scoresA, scoresP, scoresR, scoresF, models, cols = \
                 utility.fitness_feature(n_class=self.n_class, d=self.data, pop=pop, target_name=self.target,
                                         metric=self.metric, method=method)
 
-            bestScore, bestModel, bestInd, bestCols, bestScoreA, bestScoreP, bestScoreR, bestScoreF, bestScorePro,\
-            bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro = \
-                utility.feature_add_list(scores=scores, models=models, inds=pop, cols=cols, scoresA=scoresA,
-                                         scoresP=scoresP, scoresR=scoresR, scoresF=scoresF, bestScorePro=bestScorePro,
-                                         bestModelPro=bestModelPro, bestIndsPro=bestIndsPro, bestColsPro=bestColsPro,
-                                         bestAPro=bestAPro, bestPPro=bestPPro, bestRPro=bestRPro, bestFPro=bestFPro)
+            pop_bar = utility.create_population_feature_bar(pop=pop)
+
+            scores_bar, scoresA_bar, scoresP_bar, scoresR_bar, scoresF_bar, models_bar, cols_bar = \
+                utility.fitness_feature(n_class=self.n_class, d=self.data, pop=pop_bar, target_name=self.target,
+                                        metric=self.metric, method=method)
+
+            for i in range(self.n_pop):
+                if scores[i] < scores_bar[i]:
+                    pop[i] = pop_bar[i]
+                    scores[i] = scores_bar[i]
+                    scoresA[i] = scoresA_bar[i]
+                    scoresP[i] = scoresP_bar[i]
+                    scoresR[i] = scoresR_bar[i]
+                    scoresF[i] = scoresF_bar[i]
+                    models[i] = models_bar[i]
+                    cols[i] = cols_bar[i]
+
+            bestScore, worstScore, bestModel, bestInd, bestCols, bestScoreA, bestScoreP, bestScoreR, \
+            bestScoreF, bestScorePro, bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, \
+            bestFPro = \
+                utility.feature_add_list_plus(scores=scores, models=models, inds=pop, cols=cols,
+                                              scoresA=scoresA, scoresP=scoresP, scoresR=scoresR,
+                                              scoresF=scoresF, bestScorePro=bestScorePro,
+                                              bestModelPro=bestModelPro, bestIndsPro=bestIndsPro,
+                                              bestColsPro=bestColsPro, bestAPro=bestAPro, bestPPro=bestPPro,
+                                              bestRPro=bestRPro, bestFPro=bestFPro)
 
             generation = 0
 
@@ -147,25 +200,72 @@ class Differential:
 
             print_out = print_out + "\n"
 
+            pbest = int(self.n_pop)
+
+            archive.append(bestInd)
+
             for generation in range(self.n_gen):
 
                 instant = time.time()
 
+                # Liste des bons croisements
+                cross_probas = []
+
+                temp = 1 - (math.sqrt((generation / self.n_gen)*self.alpha))
+
+                if pbest*temp < 1:
+                    val = 1
+                else:
+                    val = round(pbest*temp)
+
+                mylist = list(range(self.n_pop))
+                random.shuffle(mylist)
+
+                half = len(mylist)//2
+                list1 = mylist[:half]
+
                 # Création des mutants
                 for i in range(self.n_pop):
 
-                    # mutation
-                    mutant = de.mutate(F=self.F, pop=pop, bestInd=bestInd, ind_pos=i, strat=self.strat)
+                    if temp < 1:
+                        temp = 1
+                    indices = (-np.array(scores)).argsort()[:val]
 
-                    # croisement
-                    trial = de.crossover(n_ind=self.n_ind, ind=pop[i], mutant=mutant,
-                                         cross_proba=self.cross_proba)
+                    cross_proba = -1
+                    while cross_proba > 1 or cross_proba < 0:
+                        cross_proba = stats.norm.rvs(loc=muCR, scale=0.1)
+
+                    pop_archive = np.vstack((pop, archive))
+
+                    if i in list1:
+                        pindex = indices[0]
+                    else:
+                        pindex = indices[random.randint(0, len(indices) - 1)]
+
+                    pInd = pop[pindex]
+
+                    archive_index = random.randint(0, len(pop_archive) - 1)
+
+                    idxs = [idx for idx in range(len(pop)) if idx != i and idx != pindex and idx != archive_index]
+                    selected = np.random.choice(idxs, 2, replace=False)
+                    xr1, xr2 = pop[selected]
+
+                    xra = pop_archive[archive_index]
+
+                    mutant = []
+
+                    for j in range(self.n_ind):
+                        mutant.append(((xr1[j] ^ xra[j]) and xr1[j]) or (not (xr1[j] ^ xra[j]) and pInd[j]))
+
+                    trial = de.crossover(n_ind=self.n_ind, ind=pop[i], mutant=mutant, cross_proba=cross_proba)
 
                     score_m, accuracy_m, precision_m, recall_m, fscore_m, model_m, col_m = \
                         utility.fitness_ind_feature(n_class=self.n_class, d=self.data, ind=trial,
                                                     target_name=self.target, metric=self.metric, method=method)
 
                     if scores[i] < score_m or ((scores[i] == score_m) and (len(cols[i]) > len(col_m))):
+                        archive.append((pop[i]))
+
                         pop[i] = trial
                         scores[i] = score_m
                         scoresA[i] = accuracy_m
@@ -175,15 +275,34 @@ class Differential:
                         models[i] = model_m
                         cols[i] = col_m
 
-                        bestScore, bestModel, bestInd, bestCols, bestScoreA, bestScoreP, bestScoreR, bestScoreF,\
-                        bestScorePro, bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro = \
-                            utility.feature_add_list(scores=scores, models=models, inds=pop, cols=cols, scoresA=scoresA,
-                                                     scoresP=scoresP, scoresR=scoresR, scoresF=scoresF,
-                                                     bestScorePro=bestScorePro,
-                                                     bestModelPro=bestModelPro, bestIndsPro=bestIndsPro,
-                                                     bestColsPro=bestColsPro,
-                                                     bestAPro=bestAPro, bestPPro=bestPPro, bestRPro=bestRPro,
-                                                     bestFPro=bestFPro)
+                        cross_probas.append(cross_proba)
+
+                        bestScore, worstScore, bestModel, bestInd, bestCols, bestScoreA, bestScoreP, bestScoreR,\
+                        bestScoreF, bestScorePro, bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro,\
+                        bestFPro = \
+                            utility.feature_add_list_plus(scores=scores, models=models, inds=pop, cols=cols,
+                                                          scoresA=scoresA, scoresP=scoresP, scoresR=scoresR,
+                                                          scoresF=scoresF, bestScorePro=bestScorePro,
+                                                          bestModelPro=bestModelPro, bestIndsPro=bestIndsPro,
+                                                          bestColsPro=bestColsPro, bestAPro=bestAPro, bestPPro=bestPPro,
+                                                          bestRPro=bestRPro, bestFPro=bestFPro)
+
+                        uniques = []
+                        for arr in archive:
+                            if not any(np.array_equal(arr, unique_arr) for unique_arr in uniques):
+                                uniques.append(arr)
+
+                        archive = uniques
+
+                        while len(archive) > self.n_pop:
+                            archive.pop(random.randint(0, len(archive) - 1))
+
+                # Enlever les doublons de nos listes
+                cross_probas = utility.f7(cross_probas)
+
+                muCR = self.update_param(muCR=muCR, SCR=cross_probas)
+
+                muCRs.append(muCR)
 
                 generation = generation + 1
 
@@ -196,7 +315,7 @@ class Differential:
                 print_out = utility.new_my_print_feature(print_out=print_out, mode=mode, method=method,
                                                          mean=mean_scores, bestScore=bestScore, numCols=len(bestCols),
                                                          time_exe=time_instant, time_total=time_debut, entropy=entropy,
-                                                         iter=generation, val="/")
+                                                         iter=generation, val=val)
 
                 print_out = print_out + "\n"
 
@@ -206,8 +325,8 @@ class Differential:
                                                                 y2=y2, yTps=yTps, yVars=yVars)
 
                 utility.plot_feature(x1=x1, y1=y1, y2=y2, yTps=yTps, yVars=yVars, n_pop=self.n_pop, n_gen=self.n_gen,
-                                     heuristic="Evolution différentielle", folderName=folderName, path=self.path2,
-                                     bestScore=bestScore, mean_scores=mean_scores,
+                                     heuristic="Evolution différentielle progressive binaire", folderName=folderName,
+                                     path=self.path2, bestScore=bestScore, mean_scores=mean_scores,
                                      time_total=time_debut.total_seconds(), metric=self.metric)
 
                 if bestScore > scoreMax:
@@ -220,7 +339,7 @@ class Differential:
                     scoreRMax = bestScoreR
                     scoreFMax = bestScoreF
 
-                self.write_res(folderName=folderName, y1=y1, y2=y2, colMax=colMax,
+                self.write_res(folderName=folderName, probas=muCRs, y1=y1, y2=y2, colMax=colMax,
                                bestScorePro=bestScorePro, bestAPro=bestAPro, bestPPro=bestPPro, bestRPro=bestRPro,
                                bestFPro=bestFPro, bestModelPro=bestModelPro, bestScore=bestScore, bestScoreA=scoreAMax,
                                bestScoreP=scorePMax, bestScoreR=scoreRMax, bestScoreF=scoreFMax, bestModel=modelMax,
@@ -228,15 +347,15 @@ class Differential:
 
             besties, names, iters, times, names2, features, names3 = \
                 utility.queues_put_feature(y2=y2, folderName=folderName, scoreMax=scoreMax, iter=generation, yTps=yTps,
-                                           time=time_debut.total_seconds(), besties=besties, names=names, names2=names2,
-                                           iters=iters, times=times, features=features, names3=names3, yVars=yVars,
-                                           feature=len(bestCols))
+                                       time=time_debut.total_seconds(), besties=besties, names=names, names2=names2,
+                                       iters=iters, times=times, features=features, names3=names3, yVars=yVars,
+                                       feature=len(bestCols))
 
     def init(self):
 
-        print("#######################################")
-        print("#ALGORITHME A EVOLUTION DIFFERENTIELLE#")
-        print("#######################################")
+        print("##############################################")
+        print("#EVOLUTION DIFFERENTIELLE PROGRESSIVE BINAIRE#")
+        print("##############################################")
         print()
 
         besties, names, iters, times, names2, features, names3 = utility.queues_init()
@@ -246,6 +365,7 @@ class Differential:
         n = len(mods)
         mods = [mods[i::n] for i in range(n)]
 
+        # processes = []
         arglist = []
         for part in mods:
             arglist.append((part, besties, names, iters, times, names2, features, names3))
@@ -260,8 +380,8 @@ class Differential:
 
         pool.join()
 
-        return utility.res(heuristic="Evolution différentielle", besties=bestiesLst, names=namesLst, iters=itersLst,
-                           times=timesLst, names2=names2Lst, features=featuresLst, names3=names3Lst,
+        return utility.res(heuristic="Evolution différentielle progressive binaire", besties=bestiesLst, names=namesLst,
+                           iters=itersLst, times=timesLst, names2=names2Lst, features=featuresLst, names3=names3Lst,
                            path=self.path2, dataset=self.dataset)
 
 
@@ -270,7 +390,7 @@ if __name__ == '__main__':
     diff = Differential(dataset="scene", target="Urban",
                         metric="accuracy",
                         list_exp=["lr", "svm", "gnb"],
-                        pop=30, gen=20,
-                        cross_proba=0.5, F=1.0, strat='de_best_1')
-
+                        pop=30, gen=20, learning_rate=0.1, alpha=2.0)
     diff.init()
+
+

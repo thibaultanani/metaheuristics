@@ -18,9 +18,27 @@ np.set_printoptions(threshold=sys.maxsize)
 
 
 class Pbil:
-
+    """
+    Parameters
+    ----------
+    dataset: [string] The name of the file containing the data (.csv or .xlsx)
+    target: [string] Target feature for classification
+    metric: [string] Choice of metric for optimization [accuracy (default), precision, recall or f1-score]
+    list_exp: [list: string] List of learning methods for experiments running in parallel
+              - "LR": logistic regression (default)
+              - "SVM": support vector machines
+              - "KNN": K-nearest neighbors
+              - "RDC": random forest
+              - "GNB": gaussian naive bayes
+    pop: [int] Number of solutions evaluated per generation
+    gen: [int] Number of generations/iterations for the algorithm
+    learning_rate: [float (0.0:1.0)] Speed at which the probability vector values converge toward 0.0 or 1.0
+    mut_proba: [float (0.0:1.0)] Probability to do a mutation
+    mut_shift: [float (0.0:1.0)] Impact of the mutation on the probability vectors
+    """
     def __init__(self, dataset, target, metric, list_exp, pop, gen, learning_rate, mut_proba, mut_shift):
 
+        self.heuristic = "PBIL"
         self.dataset = dataset
         self.target = target
         self.metric = metric
@@ -31,13 +49,13 @@ class Pbil:
         self.mut_proba = mut_proba
         self.mut_shift = mut_shift
         self.path1 = os.path.dirname(os.getcwd()) + '/in/'
-        self.path2 = os.path.dirname(os.getcwd()) + '/out'
+        self.path2 = os.path.dirname(os.getcwd()) + '/out/' + self.heuristic + '/' + dataset
         self.data = utility.read(filename=(self.path1 + dataset))
         self.cols = self.data.drop([self.target], axis=1).columns
         self.unique, self.count = np.unique(self.data[self.target], return_counts=True)
         self.n_class = len(self.unique)
         self.n_ind = len(self.cols)
-        utility.cleanOut()
+        utility.cleanOut(path=self.path2)
 
     def create_population(self, probas):
         pop = np.zeros((self.n_pop, self.n_ind), dtype=bool)
@@ -62,10 +80,11 @@ class Pbil:
     def write_res(self, folderName, probas, y1, y2, colMax, bestScorePro,
                   bestAPro, bestPPro, bestRPro, bestFPro, bestModelPro,
                   bestScore, bestScoreA, bestScoreP, bestScoreR,
-                  bestScoreF, bestModel, bestInd, debut, out, yTps):
+                  bestScoreF, bestModel, bestInd, debut, out, yTps, yVars, method):
         a = os.path.join(os.path.join(self.path2, folderName), 'resultat.txt')
         f = open(a, "w")
         string = "heuristique: Apprentissage incrémental à base de population" + os.linesep + \
+                 "méthode: " + str(method) + os.linesep + \
                  "population: " + str(self.n_pop) + os.linesep + \
                  "générations: " + str(self.n_gen) + os.linesep + \
                  "taux d'apprentissage: " + str(self.learning_rate) + os.linesep + \
@@ -74,14 +93,15 @@ class Pbil:
                  "vecteur de probabilité final: " + str(probas) + os.linesep + \
                  "moyenne: " + str(y1) + os.linesep + "meilleur: " + str(y2) + os.linesep + \
                  "temps: " + str(yTps) + os.linesep + \
+                 "nombre de variables: " + str(yVars) + os.linesep + \
                  "scores: " + str(bestScorePro) + os.linesep + "exactitude: " + str(bestAPro) + os.linesep + \
                  "precision: " + str(bestPPro) + os.linesep + "rappel: " + str(bestRPro) + os.linesep + \
                  "fscore: " + str(bestFPro) + os.linesep + "model: " + str(bestModelPro) + os.linesep + \
                  "meilleur score: " + str(bestScore) + os.linesep + "meilleure exactitude: " + str(bestScoreA) + \
                  os.linesep + "meilleure precision: " + str(bestScoreP) + os.linesep + "meilleur rappel: " + \
                  str(bestScoreR) + os.linesep + "meilleur fscore: " + str(bestScoreF) + os.linesep + \
-                 "meilleur model: " + str(bestModel) + "meilleur individu: " + str(bestInd) + \
-                 "colonnes:" + str(colMax) + os.linesep + \
+                 "meilleur model: " + str(bestModel) + os.linesep + "meilleur individu: " + str(bestInd) + \
+                 os.linesep + "colonnes:" + str(colMax) + os.linesep + \
                  "temps total: " + str(timedelta(seconds=(time.time() - debut))) + os.linesep + \
                  "mémoire: " + str(psutil.virtual_memory())
         f.write(string)
@@ -90,7 +110,7 @@ class Pbil:
         f = open(a, "w")
         f.write(out)
 
-    def natural_selection(self, part, besties, names, iters, times, names2):
+    def natural_selection(self, part, besties, names, iters, times, names2, features, names3):
 
         debut = time.time()
         print_out = ""
@@ -101,32 +121,18 @@ class Pbil:
 
             folderName = mode.upper()
 
+            method = utility.getMethod(mode)
+
             utility.createDirectory(path=self.path2, folderName=folderName)
 
             # Les axes pour le graphique
-            x1 = []
-            y1 = []
-            y2 = []
-            yTps = []
+            x1, y1, y2, yTps, yVars = [], [], [], [], []
 
-            scoreMax = 0
-            modelMax = 0
-            indMax = 0
-            colMax = 0
-            scoreAMax = 0
-            scorePMax = 0
-            scoreRMax = 0
-            scoreFMax = 0
+            scoreMax, modelMax, indMax, colMax, scoreAMax, scorePMax, scoreRMax, scoreFMax = 0, 0, 0, 0, 0, 0, 0, 0
 
             # Progression des meilleurs éléments
-            bestScorePro = []
-            bestModelPro = []
-            bestColsPro = []
-            bestIndsPro = []
-            bestAPro = []
-            bestPPro = []
-            bestRPro = []
-            bestFPro = []
+            bestScorePro, bestModelPro, bestColsPro, bestIndsPro, bestAPro, bestPPro, bestRPro, bestFPro =\
+                [], [], [], [], [], [], [], []
 
             # Mesurer le temps d'execution
             instant = time.time()
@@ -139,7 +145,7 @@ class Pbil:
 
             scores, scoresA, scoresP, scoresR, scoresF, models, cols = \
                 utility.fitness_feature(n_class=self.n_class, d=self.data, pop=pop, target_name=self.target,
-                                        metric=self.metric, method=mode)
+                                        metric=self.metric, method=method)
 
             bestScore, bestModel, bestInd, bestCols, bestScoreA, bestScoreP, bestScoreR, bestScoreF, bestScorePro,\
             bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro = \
@@ -154,10 +160,11 @@ class Pbil:
             time_instant = timedelta(seconds=(time.time() - instant))
             time_debut = timedelta(seconds=(time.time() - debut))
 
-            x1, y1, y2, yTps = utility.add_axis_max(maxScore=bestScore, meanScore=mean_scores, iter=generation,
-                                                    time_debut=time_debut, x1=x1, y1=y1, y2=y2, yTps=yTps)
+            x1, y1, y2, yTps, yVars = utility.add_axis_vars(bestScore=bestScore, meanScore=mean_scores, iter=generation,
+                                                            vars=len(bestCols), time_debut=time_debut, x1=x1, y1=y1,
+                                                            y2=y2, yTps=yTps, yVars=yVars)
 
-            print_out = utility.my_print_feature(print_out=print_out, mode=mode, mean=mean_scores,
+            print_out = utility.my_print_feature(print_out=print_out, mode=mode, method=method, mean=mean_scores,
                                                  bestScore=bestScore, numCols=len(bestCols), time_exe=time_instant,
                                                  time_total=time_debut, iter=generation)
 
@@ -170,6 +177,7 @@ class Pbil:
             probas = self.mutate_proba(probas=probas)
 
             scoreMax = bestScore
+            colMax = bestCols
 
             for generation in range(self.n_gen):
 
@@ -179,7 +187,7 @@ class Pbil:
 
                 scores, scoresA, scoresP, scoresR, scoresF, models, cols = \
                     utility.fitness_feature(n_class=self.n_class, d=self.data, pop=pop, target_name=self.target,
-                                            metric=self.metric, method=mode)
+                                            metric=self.metric, method=method)
 
                 bestScore, bestModel, bestInd, bestCols, bestScoreA, bestScoreP, bestScoreR, bestScoreF, bestScorePro, \
                 bestModelPro, bestIndsPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro = \
@@ -196,16 +204,21 @@ class Pbil:
                 time_instant = timedelta(seconds=(time.time() - instant))
                 time_debut = timedelta(seconds=(time.time() - debut))
 
-                print_out = utility.my_print_feature(print_out=print_out, mode=mode, mean=mean_scores,
-                                                     bestScore=bestScore, numCols=len(bestCols), time_exe=time_instant,
-                                                     time_total=time_debut, iter=generation)
+                entropy = utility.get_entropy(pop=pop, inds=self.n_pop, size=self.n_ind)
+
+                print_out = utility.new_my_print_feature(print_out=print_out, mode=mode, method=method,
+                                                         mean=mean_scores, bestScore=bestScore, numCols=len(bestCols),
+                                                         time_exe=time_instant, time_total=time_debut, entropy=entropy,
+                                                         iter=generation, val="/")
 
                 print_out = print_out + "\n"
 
-                x1, y1, y2, yTps = utility.add_axis_max(maxScore=scoreMax, meanScore=mean_scores, iter=generation,
-                                                        time_debut=time_debut, x1=x1, y1=y1, y2=y2, yTps=yTps)
+                x1, y1, y2, yTps, yVars = utility.add_axis_vars(bestScore=bestScore, meanScore=mean_scores,
+                                                                iter=generation,
+                                                                vars=len(bestCols), time_debut=time_debut, x1=x1, y1=y1,
+                                                                y2=y2, yTps=yTps, yVars=yVars)
 
-                utility.plot_feature(x1=x1, y1=y1, y2=y2, yTps=yTps, n_pop=self.n_pop, n_gen=self.n_gen,
+                utility.plot_feature(x1=x1, y1=y1, y2=y2, yTps=yTps, yVars=yVars, n_pop=self.n_pop, n_gen=self.n_gen,
                                      heuristic="Apprentissage incrémental à base de population", folderName=folderName,
                                      path=self.path2, bestScore=bestScore, mean_scores=mean_scores,
                                      time_total=time_debut.total_seconds(), metric=self.metric)
@@ -228,12 +241,13 @@ class Pbil:
                                bestScorePro=bestScorePro, bestAPro=bestAPro, bestPPro=bestPPro, bestRPro=bestRPro,
                                bestFPro=bestFPro, bestModelPro=bestModelPro, bestScore=bestScore, bestScoreA=scoreAMax,
                                bestScoreP=scorePMax, bestScoreR=scoreRMax, bestScoreF=scoreFMax, bestModel=modelMax,
-                               bestInd=indMax, debut=debut, out=print_out, yTps=yTps)
+                               bestInd=indMax, debut=debut, out=print_out, yTps=yTps, yVars=yVars, method=method)
 
-            besties, names, iters, times, names2 = \
+            besties, names, iters, times, names2, features, names3 = \
                 utility.queues_put_feature(y2=y2, folderName=folderName, scoreMax=scoreMax, iter=generation, yTps=yTps,
-                                           time=time_debut.total_seconds(), besties=besties, names=names,
-                                           names2=names2, iters=iters, times=times)
+                                           time=time_debut.total_seconds(), besties=besties, names=names, names2=names2,
+                                           iters=iters, times=times, features=features, names3=names3, yVars=yVars,
+                                           feature=len(bestCols))
 
     def init(self):
 
@@ -242,38 +256,39 @@ class Pbil:
         print("################################################")
         print()
 
-        besties, names, iters, times, names2 = utility.queues_init()
+        besties, names, iters, times, names2, features, names3 = utility.queues_init()
 
         mods = self.list_exp
 
         n = len(mods)
         mods = [mods[i::n] for i in range(n)]
 
-        processes = []
-
+        arglist = []
         for part in mods:
-            process = multiprocessing.Process(target=self.natural_selection,
-                                              args=(part, besties, names, iters, times, names2))
-            processes.append(process)
-            process.start()
+            arglist.append((part, besties, names, iters, times, names2, features, names3))
 
-        bestiesLst, namesLst, itersLst, timesLst, names2Lst =\
-            utility.queues_get(n_process=len(processes), besties=besties, names=names, names2=names2, iters=iters,
-                               times=times)
+        pool = multiprocessing.Pool(processes=len(mods))
+        pool.starmap(self.natural_selection, arglist)
+        pool.close()
 
-        for process in processes:
-            process.join()
+        bestiesLst, namesLst, itersLst, timesLst, names2Lst, featuresLst, names3Lst =\
+            utility.queues_get(n_process=len(mods), besties=besties, names=names, names2=names2, iters=iters,
+                               times=times, features=features, names3=names3)
+
+        pool.join()
 
         return utility.res(heuristic="Apprentissage incrémental à base de population",
                            besties=bestiesLst, names=namesLst, iters=itersLst,
-                           times=timesLst, names2=names2Lst, path=self.path2, dataset=self.dataset)
+                           times=timesLst, names2=names2Lst, features=featuresLst, names3=names3Lst,
+                           path=self.path2, dataset=self.dataset)
 
 
 if __name__ == '__main__':
 
-    pbil = Pbil(dataset="als", target="survived", metric="recall",
-                list_exp=["EXP1", "EXP2", "EXP3", "EXP4", "EXP5", "EXP6", "EXP7", "EXP8", "EXP9", "EXP10"],
-                pop=30, gen=1000, learning_rate=0.1, mut_proba=0.2, mut_shift=0.05)
+    pbil = Pbil(dataset="scene", target="Urban",
+                metric="accuracy",
+                list_exp=["lr", "svm", "gnb"],
+                pop=30, gen=20, learning_rate=0.1, mut_proba=0.2, mut_shift=0.05)
 
     pbil.init()
 
