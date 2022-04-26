@@ -36,6 +36,7 @@ class Differential:
     pop: [int] Number of solutions evaluated per generation
     gen: [int] Number of generations/iterations for the algorithm
     learning_rate: [float (0.0:1.0)] Speed at which the crossover probability is going to converge toward 0.0 or 1.0
+    alpha: [float] Speed at which the number of p decrease for selecting one of p_best indivuals
     """
     def __init__(self, dataset, target, metric, list_exp, pop, gen, learning_rate, alpha):
 
@@ -115,30 +116,13 @@ class Differential:
             utility.createDirectory(path=self.path2, folderName=folderName)
 
             # Les axes pour le graphique
-            x1 = []
-            y1 = []
-            y2 = []
-            yTps = []
-            yVars = []
+            x1, y1, y2, yTps, yVars = [], [], [], [], []
 
-            scoreMax = 0
-            modelMax = 0
-            indMax = 0
-            colMax = 0
-            scoreAMax = 0
-            scorePMax = 0
-            scoreRMax = 0
-            scoreFMax = 0
+            scoreMax, modelMax, indMax, colMax, scoreAMax, scorePMax, scoreRMax, scoreFMax = 0, 0, 0, 0, 0, 0, 0, 0
 
             # Progression des meilleurs éléments
-            bestScorePro = []
-            bestModelPro = []
-            bestColsPro = []
-            bestIndsPro = []
-            bestAPro = []
-            bestPPro = []
-            bestRPro = []
-            bestFPro = []
+            bestScorePro, bestModelPro, bestColsPro, bestIndsPro, bestAPro, bestPPro, bestRPro, bestFPro =\
+                [], [], [], [], [], [], [], []
 
             # Mesurer le temps d'execution
             instant = time.time()
@@ -200,8 +184,6 @@ class Differential:
 
             print_out = print_out + "\n"
 
-            pbest = int(self.n_pop)
-
             archive.append(bestInd)
 
             for generation in range(self.n_gen):
@@ -211,24 +193,17 @@ class Differential:
                 # Liste des bons croisements
                 cross_probas = []
 
-                temp = 1 - (math.sqrt((generation / self.n_gen)*self.alpha))
-
-                if pbest*temp < 1:
-                    val = 1
-                else:
-                    val = round(pbest*temp)
+                val = max(1, round(self.n_pop * (1 - (math.sqrt((generation / self.n_gen)*self.alpha)))))
 
                 mylist = list(range(self.n_pop))
                 random.shuffle(mylist)
 
-                half = len(mylist)//2
+                half = int(len(mylist)//2)
                 list1 = mylist[:half]
 
                 # Création des mutants
                 for i in range(self.n_pop):
 
-                    if temp < 1:
-                        temp = 1
                     indices = (-np.array(scores)).argsort()[:val]
 
                     cross_proba = -1
@@ -238,13 +213,16 @@ class Differential:
                     pop_archive = np.vstack((pop, archive))
 
                     if i in list1:
-                        pindex = indices[0]
-                    else:
                         pindex = indices[random.randint(0, len(indices) - 1)]
+                    else:
+                        pindex = indices[0]
 
                     pInd = pop[pindex]
 
-                    archive_index = random.randint(0, len(pop_archive) - 1)
+                    while True:
+                        archive_index = random.randint(0, len(pop_archive) - 1)
+                        if (pindex != archive_index) and (i != archive_index):
+                            break
 
                     idxs = [idx for idx in range(len(pop)) if idx != i and idx != pindex and idx != archive_index]
                     selected = np.random.choice(idxs, 2, replace=False)
