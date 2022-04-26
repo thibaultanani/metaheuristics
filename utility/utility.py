@@ -133,15 +133,18 @@ def filter_add_list(score, model, col, accuracy, precision, recall, fscore, best
            bestScorePro, bestModelPro, bestColsPro, bestAPro, bestPPro, bestRPro, bestFPro
 
 
-def conjecture_add_list(scores, inds, bestScorePro, bestIndsPro):
+def conjecture_add_list(scores, inds, cols, graphs, bestScorePro, bestIndsPro, bestColsPro):
     argmax = np.argmax(scores)
     bestScore = scores[argmax]
     bestInd = inds[argmax]
+    bestCols = cols[argmax]
+    bestGraph = graphs[argmax]
 
     bestScorePro.append(bestScore)
     bestIndsPro.append(bestInd)
+    bestColsPro.append(bestCols)
 
-    return bestScore, bestInd, bestScorePro, bestIndsPro
+    return bestScore, bestInd, bestCols, bestGraph, bestScorePro, bestIndsPro, bestColsPro
 
 
 def add_axis(bestScore, meanScore, iter, time_debut, x1, y1, y2, yTps):
@@ -256,6 +259,21 @@ def my_print_conjecture(print_out, mode, mean, bestScore, time_exe, time_total, 
     print_out = print_out + display
     print(display)
     return print_out
+
+
+def new_my_print_conjecture(print_out, mode, mean, bestScore, time_exe, time_total, entropy, iter, val):
+    display = mode + " [" + mode + "]" + \
+        " génération: " + str(iter) + \
+        " moyenne: " + str(mean) + \
+        " meilleur: " + str(bestScore) + \
+        " temps exe: " + str(time_exe) + \
+        " temps total: " + str(time_total) + \
+        " entropie: " + str(sum(entropy)/len(entropy))+ \
+        " val: " + str(val)
+    print_out = print_out + display
+    print(display)
+    return print_out
+
 
 
 def isNumber(s):
@@ -578,23 +596,29 @@ def calcScore(pop, n_vertices):
 
     scores = []
     inds = []
+    cols = []
+    graphs = []
 
     for ind in pop:
         G = nx.Graph()
         G.add_nodes_from(list(range(n_vertices)))
         count = 0
+        cpt = 0
         for i in range(n_vertices):
             for j in range(i + 1, n_vertices):
-                if ind[count] == 1:
+                if ind[count]:
                     G.add_edge(i, j)
+                    cpt = cpt + 1
                 count += 1
 
+        # Calculate the eigenvalues of G
         evals = np.linalg.eigvalsh(nx.adjacency_matrix(G).todense())
         evalsRealAbs = np.zeros_like(evals)
         for i in range(len(evals)):
             evalsRealAbs[i] = abs(evals[i])
         lambda1 = max(evalsRealAbs)
 
+        # Calculate the matching number of G
         maxMatch = nx.max_weight_matching(G)
         mu = len(maxMatch)
 
@@ -603,16 +627,18 @@ def calcScore(pop, n_vertices):
         if not (nx.is_connected(G)):
             myScore = -100000
 
-        if myScore > 0:
+        if myScore >= 0:
             print(ind)
-            nx.draw_kamada_kawai(G)
+            nx.draw_kamada_kawai(G, with_labels=True)
             plt.show()
             # exit()
 
         scores.append(myScore)
         inds.append(ind)
+        cols.append(cpt)
+        graphs.append(G)
 
-    return scores, inds
+    return scores, inds, cols, graphs
 
 
 def calcScore_ind(ind, n_vertices):
@@ -620,10 +646,12 @@ def calcScore_ind(ind, n_vertices):
     G = nx.Graph()
     G.add_nodes_from(list(range(n_vertices)))
     count = 0
+    cpt = 0
     for i in range(n_vertices):
         for j in range(i + 1, n_vertices):
-            if ind[count] == 1:
+            if ind[count]:
                 G.add_edge(i, j)
+                cpt = cpt + 1
             count += 1
 
     evals = np.linalg.eigvalsh(nx.adjacency_matrix(G).todense())
@@ -642,11 +670,11 @@ def calcScore_ind(ind, n_vertices):
 
     if myScore > 0:
         print(ind)
-        nx.draw_kamada_kawai(G)
+        nx.draw_kamada_kawai(G, with_labels=True)
         plt.show()
-        exit()
+        # exit()
 
-    return myScore
+    return myScore, cpt, G
 
 
 def get_entropy(pop, inds, size):
@@ -696,6 +724,18 @@ def queues_put_knapsack(y2, folderName, scoreMax, iter, yTps, time, besties, nam
     times.put(yTps)
     names2.put(folderName + ": " + "{:.0f}".format(time))
     return besties, names, iters, times, names2
+
+
+def queues_put_conjecture(y2, folderName, scoreMax, iter, yTps, yEdges, time, besties, edge, names, names2, names3,
+                          iters, times, edges):
+    besties.put(y2)
+    names.put(folderName + ": " + "{:.2f}".format(scoreMax))
+    iters.put(iter)
+    times.put(yTps)
+    names2.put(folderName + ": " + str(time))
+    edges.put(yEdges)
+    names3.put(folderName + ": " + str(edge))
+    return besties, names, iters, times, names2, edges, names3
 
 
 def queues_get(n_process, besties, names, names2, iters, times, features, names3):
@@ -821,7 +861,8 @@ def plot_filter(x1, y1, yTps, n_k, stats, folderName, path, bestScore, time_tota
     plt.close(fig3)
 
 
-def plot_conjecture(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path, bestScore, mean_scores, time_total):
+def plot_conjecture(x1, y1, y2, yTps, yEdges, n_pop, n_gen, heuristic, folderName, path, bestScore, bestGraph,
+                    mean_scores, time_total):
     fig, ax = plt.subplots()
     ax.plot(x1, y1)
     ax.plot(x1, y2)
@@ -829,26 +870,45 @@ def plot_conjecture(x1, y1, y2, yTps, n_pop, n_gen, heuristic, folderName, path,
     ax.set_xlabel("génération")
     ax.set_ylabel("score")
     ax.grid()
-    ax.legend(labels=["moyenne des " + str(int(n_pop / 2)) + " meilleurs: " + "{:.3f}".format(mean_scores),
-                      "Le meilleur: " + "{:.3f}".format(bestScore)],
+    ax.legend(labels=["moyenne des " + str(int(n_pop / 2)) + " meilleurs: " + "{:.2f}".format(mean_scores),
+                      "Le meilleur: " + "{:.2f}".format(bestScore)],
               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
     a = os.path.join(os.path.join(path, folderName), 'plot_' + str(n_gen) + '.png')
     b = os.path.join(os.getcwd(), a)
     fig.savefig(os.path.abspath(b), bbox_inches="tight")
     plt.close(fig)
 
+    fig2, ax2 = plt.subplots()
+    ax2.plot(x1, yEdges)
+    ax2.set_title("Evolution du nombre d'arêtes par génération (" + folderName + ")" + "\n" + heuristic + "\n")
+    ax2.set_xlabel("génération")
+    ax2.set_ylabel("nombres d'arêtes")
+    ax2.grid()
+    ax2.legend(labels=["Nombre d'arêtes maximal: " + str(yEdges[len(yEdges)-1])],
+               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotEdges_' + str(n_gen) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig2.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig2)
+
     fig3, ax3 = plt.subplots()
     ax3.plot(x1, yTps)
-    ax.set_title("Evolution du score par génération (" + folderName + ")" + "\n" + heuristic + "\n")
-    ax.set_xlabel("génération")
+    ax3.set_title("Evolution du temps en seconde par génération (" + folderName + ")" + "\n" + heuristic + "\n")
+    ax3.set_xlabel("génération")
     ax3.set_ylabel("Temps en seconde")
     ax3.grid()
-    ax3.legend(labels=["Temps total: " + "{:.0f}".format(time_total)],
+    ax3.legend(labels=["Temps total: " + "{:0f}".format(time_total)],
                loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
     a = os.path.join(os.path.join(path, folderName), 'plotTps_' + str(n_gen) + '.png')
     b = os.path.join(os.getcwd(), a)
     fig3.savefig(os.path.abspath(b), bbox_inches="tight")
     plt.close(fig3)
+
+    nx.draw_kamada_kawai(bestGraph, with_labels=True)
+    a = os.path.join(os.path.join(path, folderName), 'plotGraph_' + str(n_gen) + '.png')
+    b = os.path.join(os.getcwd(), a)
+    plt.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close()
 
 
 def res(heuristic, besties, names, iters, times, names2, features, names3, path, dataset):
@@ -916,6 +976,76 @@ def res(heuristic, besties, names, iters, times, names2, features, names3, path,
     ax3.legend(labels=names3,
                loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
     a = os.path.join(os.path.join(path, folderName), 'plotVars_' + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig3.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig3)
+
+
+def res_conjecture(heuristic, besties, names, times, names2, edges, names3, path, conjecture_name):
+
+    besties = np.array(besties)
+    names = np.array(names)
+    times = np.array(times)
+    names2 = np.array(names2)
+    edges = np.array(edges)
+    names3 = np.array(names3)
+
+    indices = names.argsort()
+    besties = besties[indices].tolist()
+    names = names[indices].tolist()
+    times = times[indices].tolist()
+    names2 = names2[indices].tolist()
+    edges = edges[indices].tolist()
+    names3 = names3[indices].tolist()
+
+    folderName = "Total_" + conjecture_name
+    createDirectory(path, folderName)
+    cmap = ['dodgerblue', 'red', 'springgreen', 'gold', 'orange', 'deeppink', 'darkviolet', 'blue', 'dimgray',
+            'salmon', 'green', 'cyan', 'indigo', 'crimson', 'chocolate', 'black']
+    fig, ax = plt.subplots()
+    i = 0
+    for val in besties:
+        ax.plot(list(range(0, len(val))), val, color=cmap[i])
+        i = i + 1
+    ax.set_title("Evolution du score par génération" + "\n" + heuristic + "\n" + conjecture_name)
+    ax.set_xlabel("génération")
+    ax.set_ylabel("score")
+    ax.grid()
+    ax.legend(labels=names,
+              loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plot_' + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig)
+
+    fig2, ax2 = plt.subplots()
+    i = 0
+    for val in times:
+        ax2.plot(list(range(0, len(val))), val, color=cmap[i])
+        i = i + 1
+    ax2.set_title("Evolution du temps par génération" + "\n" + heuristic + "\n" + conjecture_name)
+    ax2.set_xlabel("génération")
+    ax2.set_ylabel("Temps en seconde")
+    ax2.grid()
+    ax2.legend(labels=names2,
+               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotTps_' + '.png')
+    b = os.path.join(os.getcwd(), a)
+    fig2.savefig(os.path.abspath(b), bbox_inches="tight")
+    plt.close(fig2)
+
+    fig3, ax3 = plt.subplots()
+    i = 0
+    for val in edges:
+        ax3.plot(list(range(0, len(val))), val, color=cmap[i])
+        i = i + 1
+    ax3.set_title("Evolution du nombre d'arêtes par génération" + "\n" + heuristic + "\n" + conjecture_name)
+    ax3.set_xlabel("génération")
+    ax3.set_ylabel("Nombre d'arêtes")
+    ax3.grid()
+    ax3.legend(labels=names3,
+               loc='center left', bbox_to_anchor=(1.04, 0.5), borderaxespad=0)
+    a = os.path.join(os.path.join(path, folderName), 'plotEdges_' + '.png')
     b = os.path.join(os.getcwd(), a)
     fig3.savefig(os.path.abspath(b), bbox_inches="tight")
     plt.close(fig3)
